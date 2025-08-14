@@ -72,7 +72,7 @@ def initialize_lattice(lattice_size=LATTICE_SIZE, n_seeds=N_SEEDS,
         orientation_theta[x, y, 0] = np.random.uniform(0, np.pi)
         orientation_phi[x, y, 0] = np.random.uniform(0, 2 * np.pi)
 
-    introduce_defects(state, atom_type)
+    
 
     return state, orientation_theta, orientation_phi, T, atom_type
 

@@ -175,6 +175,18 @@ def plot_lattice(state, title="Final Lattice State (Mid-Z Slice)", step=None, fi
         filename = f"output_images/final_lattice_midZ_impurity_c_{int(impurity_c*100)}.png"
     plt.savefig(filename, dpi=150)
     plt.close()
+    
+def plot_CET_diagnostic(state, cet_status, step, filename):
+    """Visualize CET transition with status overlay"""
+    plt.figure(figsize=(10, 8))
+    mid_z = state.shape[0] // 2
+    plt.imshow(state[:, :, mid_z].T, cmap='viridis', origin='lower')
+    plt.title(f"Step {step}: {cet_status}")
+    plt.colorbar(label='Grain ID')
+    plt.xlabel('X')
+    plt.ylabel('Y')
+    plt.savefig(filename, dpi=150)
+    plt.close()
 
 def visualize_grain_structure(state, orientation_theta, atom_type, step, impurity_c, visited=None, filename=None):
     clusters, _ = get_clusters(state, orientation_theta)
@@ -204,11 +216,16 @@ def visualize_grain_structure(state, orientation_theta, atom_type, step, impurit
     plt.savefig(filename, dpi=150)
     plt.close()
 
-def visualize_final_state(state, atom_type, orientation_theta=None, impurity_c=0.0, title="Final Lattice State", filename=None):
-    """3D scatter plot of final lattice state with atom-specific colors; optional grain boundaries for CET visualization."""
+def visualize_final_state(state, atom_type, orientation_theta=None, impurity_c=0.0,
+                          title="Final Lattice State", filename=None):
+    """
+    3D scatter plot of final lattice state with atom-specific colors;
+    optionally draws grain boundaries for CET visualization.
+    """
     fig = plt.figure()
     ax = fig.add_subplot(111, projection='3d')
 
+    # Plot atoms by type
     for atom_id, color in COLORS.items():
         if atom_id == STATES['Empty']:
             continue
@@ -216,22 +233,33 @@ def visualize_final_state(state, atom_type, orientation_theta=None, impurity_c=0
         if len(sites[0]) > 0:
             ax.scatter(
                 sites[2], sites[1], sites[0],
-                c=[color], label=list(STATES.keys())[list(STATES.values()).index(atom_id)], alpha=0.6, s=10
+                c=[color],
+                label=list(STATES.keys())[list(STATES.values()).index(atom_id)],
+                alpha=0.6, s=10
             )
 
+    # Plot grain boundaries if orientation data is provided
     if orientation_theta is not None:
-        visited = np.zeros_like(state, dtype=np.int32)
         clusters, visited = get_clusters(state, orientation_theta)
-        edges = get_cluster_edges(visited)
-        for (x1, y1, z1), (x2, y2, z2) in edges:
-            ax.plot([z1, z2], [y1, y2], [x1, x2], 'k-', linewidth=0.5, alpha=0.3)
+        for cluster in clusters:
+            edges = get_cluster_edges(cluster)
+            for (x1, y1, z1), (x2, y2, z2) in edges:
+                ax.plot(
+                    [z1, z2], [y1, y2], [x1, x2],
+                    'k-', linewidth=0.5, alpha=0.3
+                )
 
+    # Axis labels
     ax.set_xlabel('X')
     ax.set_ylabel('Y')
     ax.set_zlabel('Z (Build Direction)')
+
+    # Title with impurity %
     plt.title(f"{title}, Impurity C={impurity_c*100:.1f}%")
     plt.legend()
     plt.tight_layout()
+
+    # Save figure
     os.makedirs('output_images', exist_ok=True)
     if filename is None:
         filename = f"output_images/final_state_impurity_c_{int(impurity_c*100)}.png"

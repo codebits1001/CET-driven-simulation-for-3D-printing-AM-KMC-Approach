@@ -60,4 +60,4 @@ def introduce_defects(state, atom_type, T=None):
     L = state.shape[0]
     defects_mask = track_defects(state, atom_type, L, T) == 1
     state[defects_mask] = STATES['Defect']
-    return state
+    return defects_mask
