@@ -1,5 +1,27 @@
 
 # AFter implementing defect taracking. Test_Exp: 2(20000steps).
+# # --- Longevity tweaks (keeps events active longer) ---
+
+# # 1) Don’t kill the run on tiny rates too soon
+# RATE_THRESHOLD = 1e-30         # was 1e-25
+
+# # 2) Keep feeding the system a bit longer
+# NU_DEP = 2e13                   # was 5e12  (↑ 4x deposition attempts)
+
+# # 3) Let atoms keep moving after deposition calms down
+# NU_DIFF = 5e2                   # was 1e2   (↑ 5x attempt freq)
+# DIFF_ACT_ENERGY = 0.40          # was 0.50  (slightly easier diffusion)
+
+# # 4) Maintain nucleation activity deeper into the run
+# NU_NUCLEATION = 5e-3            # was 1e-3  (↑ 5x)
+# NUCLEATION_ENERGY = 0.80        # was 0.90  (slightly easier nucleation)
+
+# # 5) Don’t let defects choke deposition too aggressively
+# DEFECT_DEP_REDUCTION = 0.8      # was 0.5   (only 20% reduction near defects)
+
+# # Keep this defined (you already re-added it)
+# DELTA_T_C = 10                  # [K]
+
 
 """
 Constants for KMC-based CET Simulation in Additive Manufacturing
