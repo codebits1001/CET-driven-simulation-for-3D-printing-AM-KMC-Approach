@@ -172,16 +172,42 @@ def overall_microstructure_classification(clusters, G=None, R=None,
         return determine_CET(avg_ar, None, gr_threshold, ar_threshold)
     return validate_CET_with_GR(G, R, avg_ar, gr_threshold, ar_threshold)
 
-def compute_CET(state, orientation_theta, orientation_phi=None, G_over_R=None):
+def compute_CET_metrics(state, orientation_theta, orientation_phi=None, G=None, R=None):
     if orientation_phi is None:
-        orientation_phi = np.zeros_like(orientation_theta)  # Create zero array if None
+        orientation_phi = np.zeros_like(orientation_theta)
+
     clusters, _ = get_clusters(state, orientation_theta, orientation_phi)
     if not clusters:
-        print("Debug: No clusters detected, returning 'No grains detected'")
-        return "No grains detected"
+        return {
+            "avg_ar": 0.0,
+            "f_eq": 0.0,
+            "n_density": 0.0,
+            "classification": "No grains"
+        }
+
+    # Aspect ratios
     aspect_ratios = [calculate_aspect_ratio(c) for c in clusters]
     avg_ar = float(np.mean(aspect_ratios)) if aspect_ratios else 0.0
-    return determine_CET(avg_ar, G_over_R)
+
+    # Equiaxed fraction
+    equiaxed = [ar for ar in aspect_ratios if ar < CET_AR_THRESHOLD]
+    f_eq = len(equiaxed) / len(aspect_ratios) if aspect_ratios else 0.0
+
+    # Nucleation density
+    n_density = len(clusters) / float(state.size)
+
+    # Classification with/without G/R
+    if G is not None and R is not None:
+        classification = validate_CET_with_GR(G, R, avg_ar)
+    else:
+        classification = determine_CET(avg_ar, None)
+
+    return {
+        "avg_ar": avg_ar,
+        "f_eq": f_eq,
+        "n_density": n_density,
+        "classification": classification
+    }
 
 # =============================
 # THERMAL & GROWTH RATE HELPERS

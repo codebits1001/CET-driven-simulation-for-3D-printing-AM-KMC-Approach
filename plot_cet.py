@@ -1,157 +1,126 @@
-#!/usr/bin/env python3
+# analyze_results.py
+"""
+Post-processing script for CET-KMC simulation.
+Automatically collects metrics from outputs/impurity_c_*/ folders
+and generates scientific figures.
+
+Author: Govinda + ChatGPT
+"""
+
 import os
+import glob
 import pandas as pd
 import matplotlib.pyplot as plt
 
-# ---------------- USER SETTINGS ----------------
-BASE_DIR = "outputs/metrics"
-CONCENTRATIONS = [0, 10, 20]
+# ========================
+# CONFIG
+# ========================
+input_root = "outputs"
+outdir = "analysis_plots"
+os.makedirs(outdir, exist_ok=True)
 
-REFERENCE_VALUES = {
-    "AspectRatio_final": {"value": 3.0, "label": "CET threshold (lit.)"},
-    "AvgGrainSize_final": {"value": 40.0, "label": "Ref. avg grain size"},
-    "DefectDensity_final": {"value": 0.2, "label": "Ref. defect density"}
-}
+# ========================
+# Discover metric files
+# ========================
+files = {}
+for path in sorted(glob.glob(os.path.join(input_root, "impurity_c_*", "metrics_*.csv"))):
+    # Example path: outputs/impurity_c_10/metrics_10.csv
+    folder = os.path.basename(os.path.dirname(path))   # impurity_c_10
+    c_level = folder.split("_")[-1]                   # "10"
+    label = f"{c_level}% C"
+    files[label] = path
 
-OUTPUT_DIR = "analyzed_metrics_output"
-TRUTH_DIR = os.path.join(OUTPUT_DIR, ".hidden_validation")
-os.makedirs(OUTPUT_DIR, exist_ok=True)
-os.makedirs(TRUTH_DIR, exist_ok=True)
+print("📂 Found files:", files)
 
-SECTION_FOLDERS = {
-    "4.1": "Microstructure_Evolution",
-    "4.2": "Grain_Size_Distribution",
-    "4.3": "Defect_Density_Trends",
-    "4.4": "Anisotropy_Metric",
-    "4.5": "CET_Transition",
-    "4.6": "Comparison_with_Literature",
-    "4.7": "Discussion"
-}
-for sec in SECTION_FOLDERS.values():
-    os.makedirs(os.path.join(OUTPUT_DIR, sec), exist_ok=True)
+# ========================
+# Load data
+# ========================
+data = {}
+for label, f in files.items():
+    df = pd.read_csv(f)
+    data[label] = df
 
-# ---------------- FUNCTIONS ----------------
-def load_data():
-    data = {}
-    for conc in CONCENTRATIONS:
-        path = os.path.join(BASE_DIR, f"impurity_c_{conc}", f"metrics_impurity_c_{conc}.csv")
-        if not os.path.exists(path):
-            raise FileNotFoundError(f"Missing CSV for C={conc}% at {path}")
-        data[conc] = pd.read_csv(path)
-    return data
-
-def normalize_series(series):
-    return series / series.max()
-
-def plot_microstructure_evolution(data):
-    for conc, df in data.items():
-        plt.figure()
-        plt.plot(df["Step"], df["AspectRatio"], label="Aspect Ratio")
-        plt.plot(df["Step"], df["AvgGrainSize"], label="Avg Grain Size (μm)")
-        plt.xlabel("Step")
-        plt.ylabel("Value")
-        plt.title(f"Microstructure Evolution - C={conc}%")
-        plt.legend()
-        plt.savefig(os.path.join(OUTPUT_DIR, SECTION_FOLDERS["4.1"], f"microstructure_C{conc}.png"))
-        plt.close()
-
-def plot_grain_size_distribution(data):
-    for conc, df in data.items():
-        plt.figure()
-        plt.hist(df["AvgGrainSize"], bins=20, alpha=0.7, edgecolor="black")
-        plt.xlabel("Average Grain Size (μm)")
-        plt.ylabel("Frequency")
-        plt.title(f"Grain Size Distribution - C={conc}%")
-        plt.savefig(os.path.join(OUTPUT_DIR, SECTION_FOLDERS["4.2"], f"grain_size_C{conc}.png"))
-        plt.close()
-
-def plot_defect_density_trends(data):
-    for conc, df in data.items():
-        plt.figure()
-        plt.plot(df["Step"], df["DefectDensity"], label="Defect Density", color="red")
-        plt.xlabel("Step")
-        plt.ylabel("Defect Density")
-        plt.title(f"Defect Density Trend - C={conc}%")
-        plt.legend()
-        plt.savefig(os.path.join(OUTPUT_DIR, SECTION_FOLDERS["4.3"], f"defect_density_C{conc}.png"))
-        plt.close()
-
-def plot_anisotropy_metric(data):
-    for conc, df in data.items():
-        plt.figure()
-        plt.plot(df["Step"], normalize_series(df["AspectRatio"]), label="Normalized Aspect Ratio")
-        plt.xlabel("Step")
-        plt.ylabel("Normalized Aspect Ratio")
-        plt.title(f"Anisotropy (Normalized) - C={conc}%")
-        plt.legend()
-        plt.savefig(os.path.join(OUTPUT_DIR, SECTION_FOLDERS["4.4"], f"anisotropy_C{conc}.png"))
-        plt.close()
-
-def plot_cet_transition(data):
-    plt.figure()
-    max_aspect = max(df["AspectRatio"].max() for df in data.values())
-    for conc, df in data.items():
-        plt.plot(df["Step"], normalize_series(df["AspectRatio"]), label=f"C={conc}%")
-    plt.axhline(
-        y=REFERENCE_VALUES["AspectRatio_final"]["value"] / max_aspect,
-        color="black", linestyle="--", label=REFERENCE_VALUES["AspectRatio_final"]["label"]
-    )
+# ========================
+# Line Plots (evolution)
+# ========================
+def plot_evolution(metric, ylabel, filename, logy=False):
+    plt.figure(figsize=(7,5))
+    for label, df in data.items():
+        plt.plot(df["Step"], df[metric], label=label)
     plt.xlabel("Step")
-    plt.ylabel("Normalized Aspect Ratio")
-    plt.title("Combined CET Transition")
+    plt.ylabel(ylabel)
+    if logy:
+        plt.yscale("log")
     plt.legend()
-    plt.savefig(os.path.join(OUTPUT_DIR, SECTION_FOLDERS["4.5"], "CET_transition_combined.png"))
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(os.path.join(outdir, filename))
     plt.close()
 
-def validation_table(data):
-    public_results, truth_results = [], []
-    for conc, df in data.items():
-        final = df.iloc[-1]
-        aspect, grain, defect = final["AspectRatio"], final["AvgGrainSize"], final["DefectDensity"]
+plot_evolution("AspectRatio", "Aspect Ratio", "aspect_ratio_vs_step.png")
+plot_evolution("DefectDensity", "Defect Density [a.u.]", "defect_density_vs_step.png", logy=True)
+plot_evolution("EquiaxedFraction", "Equiaxed Fraction", "equiaxed_fraction_vs_step.png")
 
-        deviations = {
-            "AspectRatio_deviation": (aspect - REFERENCE_VALUES["AspectRatio_final"]["value"]) / REFERENCE_VALUES["AspectRatio_final"]["value"],
-            "AvgGrainSize_deviation": (grain - REFERENCE_VALUES["AvgGrainSize_final"]["value"]) / REFERENCE_VALUES["AvgGrainSize_final"]["value"],
-            "DefectDensity_deviation": (defect - REFERENCE_VALUES["DefectDensity_final"]["value"]) / REFERENCE_VALUES["DefectDensity_final"]["value"]
-        }
+# ========================
+# Bar Plots (final values)
+# ========================
+final_metrics = pd.DataFrame({
+    label: {
+        "Final AspectRatio": df["AspectRatio"].iloc[-1],
+        "Final DefectDensity": df["DefectDensity"].iloc[-1],
+        "Final EquiaxedFraction": df["EquiaxedFraction"].iloc[-1],
+    }
+    for label, df in data.items()
+}).T
 
-        capped = {k: min(v, 0.3) for k, v in deviations.items()}
+def plot_bar(metric, ylabel, filename):
+    plt.figure(figsize=(6,4))
+    final_metrics[metric].plot(kind="bar", color=["steelblue","darkorange","seagreen"])
+    plt.ylabel(ylabel)
+    plt.xlabel("Carbon Impurity Level")
+    plt.xticks(rotation=0)
+    plt.tight_layout()
+    plt.savefig(os.path.join(outdir, filename))
+    plt.close()
 
-        public_results.append({
-            "Concentration": conc,
-            "NormAspectRatio": aspect / df["AspectRatio"].max(),
-            "AvgGrainSize": grain,
-            "DefectDensity": defect,
-            **capped
-        })
+plot_bar("Final AspectRatio", "Aspect Ratio", "bar_aspect_ratio.png")
+plot_bar("Final DefectDensity", "Defect Density [a.u.]", "bar_defect_density.png")
+plot_bar("Final EquiaxedFraction", "Equiaxed Fraction", "bar_eqfrac.png")
 
-        truth_results.append({
-            "Concentration": conc,
-            "AspectRatio": aspect,
-            "AvgGrainSize": grain,
-            "DefectDensity": defect,
-            **deviations
-        })
+# ========================
+# Combined Summary Plot
+# ========================
+plt.figure(figsize=(12,8))
 
-    pd.DataFrame(public_results).to_csv(os.path.join(OUTPUT_DIR, SECTION_FOLDERS["4.6"], "validation_summary.csv"), index=False)
-    pd.DataFrame(truth_results).to_csv(os.path.join(TRUTH_DIR, "truth_validation.csv"), index=False)
+# 1. Line: Aspect Ratio
+plt.subplot(2,2,1)
+for label, df in data.items():
+    plt.plot(df["Step"], df["AspectRatio"], label=label)
+plt.title("Aspect Ratio Evolution")
+plt.xlabel("Step"); plt.ylabel("Aspect Ratio"); plt.legend(); plt.grid(alpha=0.3)
 
-def discussion_placeholder():
-    with open(os.path.join(OUTPUT_DIR, SECTION_FOLDERS["4.7"], "discussion.txt"), "w") as f:
-        f.write("Discussion points based on deviations, CET trends, and grain structure evolution.\n")
+# 2. Line: Defect Density
+plt.subplot(2,2,2)
+for label, df in data.items():
+    plt.plot(df["Step"], df["DefectDensity"], label=label)
+plt.title("Defect Density Evolution")
+plt.xlabel("Step"); plt.ylabel("Defect Density"); plt.yscale("log"); plt.grid(alpha=0.3)
 
-# ---------------- MAIN ----------------
-if __name__ == "__main__":
-    data = load_data()
-    print("📊 Generating all section plots & tables...")
+# 3. Line: Equiaxed Fraction
+plt.subplot(2,2,3)
+for label, df in data.items():
+    plt.plot(df["Step"], df["EquiaxedFraction"], label=label)
+plt.title("Equiaxed Fraction Evolution")
+plt.xlabel("Step"); plt.ylabel("Eq. Fraction"); plt.grid(alpha=0.3)
 
-    plot_microstructure_evolution(data)
-    plot_grain_size_distribution(data)
-    plot_defect_density_trends(data)
-    plot_anisotropy_metric(data)
-    plot_cet_transition(data)
-    validation_table(data)
-    discussion_placeholder()
+# 4. Bar: Final Defects
+plt.subplot(2,2,4)
+final_metrics["Final DefectDensity"].plot(kind="bar", color=["steelblue","darkorange","seagreen"])
+plt.title("Final Defect Density")
+plt.ylabel("Defect Density"); plt.xticks(rotation=0)
 
-    print(f"✅ All outputs saved in '{OUTPUT_DIR}' section-wise.")
-    print(f"🔒 Truth validation saved in '{TRUTH_DIR}'.")
+plt.tight_layout()
+plt.savefig(os.path.join(outdir, "summary_combined.png"))
+plt.close()
+
+print(f"✅ Analysis complete. Plots saved in {outdir}/")

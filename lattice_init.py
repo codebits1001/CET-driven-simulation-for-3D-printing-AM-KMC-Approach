@@ -8,37 +8,14 @@ from constants import (
 from defects import introduce_defects
 
 def initialize_lattice(lattice_size=LATTICE_SIZE, n_seeds=N_SEEDS,
-                       T_sub=T_SUB, T_melt=T_MELT, random_seed=42, impurity_c=0.0):
+                       T_sub=T_SUB, T_melt=T_MELT,
+                       random_seed=42, impurity_c=0.0, verbose=False):
     """
-    Initialize the simulation lattice with random seeds for multiple materials.
-
-    Parameters
-    ----------
-    lattice_size : int
-        Size of the cubic lattice.
-    n_seeds : int
-        Number of nucleation sites to initialize.
-    T_sub : float
-        Substrate temperature.
-    T_melt : float
-        Melting temperature.
-    random_seed : int
-        Seed for reproducibility.
-    impurity_c : float
-        Carbon impurity fraction (passed from main.py).
+    Initialize lattice and seed nuclei for CET simulation.
 
     Returns
     -------
-    state : ndarray (L, L, L)
-        Lattice state IDs.
-    orientation_theta : ndarray
-        Crystal orientation theta angles.
-    orientation_phi : ndarray
-        Crystal orientation phi angles.
-    T : ndarray
-        Temperature field.
-    atom_type : ndarray
-        Type of atom at each site.
+    state, orientation_theta, orientation_phi, T, atom_type
     """
     np.random.seed(random_seed)
 
@@ -48,31 +25,36 @@ def initialize_lattice(lattice_size=LATTICE_SIZE, n_seeds=N_SEEDS,
     orientation_phi = np.zeros((L, L, L))
     atom_type = np.full((L, L, L), STATES['Empty'], dtype=int)
 
+    # Linear thermal gradient (z = build direction)
     G = (T_melt - T_sub) / L
-    z = np.arange(L)[np.newaxis, np.newaxis, :]
-    T = np.full((L, L, L), T_sub, dtype=float) + G * z
+    z = np.arange(L)
+    T = T_sub + G * z[np.newaxis, np.newaxis, :]
+    T = np.repeat(T, L, axis=0).repeat(L, axis=1)
 
+    # Place initial nucleation seeds at z=0
     seed_indices = np.random.choice(L * L, n_seeds, replace=False)
     seed_x = seed_indices // L
     seed_y = seed_indices % L
 
-    print(f"Initializing {n_seeds} seeds with IMPURITY_C={impurity_c}, IMPURITY_RE={IMPURITY_RE}")
+    if verbose:
+        print(f"Initializing {n_seeds} seeds with C={impurity_c}, Re={IMPURITY_RE}")
 
     for idx, (x, y) in enumerate(zip(seed_x, seed_y)):
         rand = np.random.random()
         if rand < IMPURITY_RE:
             atom = STATES['Re']
-        elif impurity_c > 0 and rand < (IMPURITY_RE + impurity_c):
+        elif rand < (IMPURITY_RE + impurity_c):
             atom = STATES['C']
         else:
             atom = STATES['W']
-        print("Seed", idx, "at (", x, ",", y, ", 0): rand =", rand, ", atom =", atom)
+
         state[x, y, 0] = atom
         atom_type[x, y, 0] = atom
         orientation_theta[x, y, 0] = np.random.uniform(0, np.pi)
         orientation_phi[x, y, 0] = np.random.uniform(0, 2 * np.pi)
 
-    
+        if verbose:
+            print(f"Seed {idx} at ({x}, {y}, 0): rand={rand:.3f}, atom={atom}")
 
     return state, orientation_theta, orientation_phi, T, atom_type
 
